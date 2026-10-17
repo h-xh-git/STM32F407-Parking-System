@@ -4,11 +4,17 @@
 #include "bsp_hongwai.h"      // 红外传感器驱动头文件
 #include "bsp_rc522.h"        // RC522 驱动头文件（PcdSelectEx / PcdAuthState 等）
 #include "bsp_sg90.h"         // SG90 舵机驱动（Servo_360_KeyAction/Servo2_360_KeyAction，非阻塞触发）
-#include "bsp_uart6.h"        // USART6/MaixCAM（g_maixcam_plate_display）
 #include "protocol.h"         // 协议头文件（对外发送函数）
+#include "oled_cn_text.h"     // 中文 UI 文本（UTF-8 转义宏，避免 Keil 源码编码问题）
 #include <string.h>           // 内存/字符串操作库（memcpy、memset等）
 #include <stdio.h>            // 标准输入输出库（sprintf等）
 #include "board.h"
+
+// ==================== OLED 中文显示辅助（前置声明） ====================
+static u8 OLED_LabelColon(u8 y, const char *label);
+static void OLED_ShowPlateLine(u8 y, const uint8_t *plate);
+static void OLED_ShowCardLine(u8 y, const uint8_t *uid);
+static void OLED_ShowLabelNumber(u8 y, const char *label, uint32_t value, const char *unit);
 
 // ==================== 全局变量定义 ====================
 ConfigModeState_t g_config_mode_state;  // 配置模式状态
@@ -516,13 +522,8 @@ uint8_t ParkingSystem_HandleEntry(const uint8_t *uid, const uint8_t *license_pla
         // 3. 黑名单车牌拒绝入场
         if (card_index != 0xFF && card_database[card_index].is_blacklist) {
             printf("[Parking] Entry denied: blacklist plate %s\r\n", (char*)plate_buf);
-            ParkingSystem_ShowDenied(OLED_DISPLAY_BLACKLIST, (uint8_t*)g_maixcam_plate_display);
+            ParkingSystem_ShowDenied(OLED_DISPLAY_BLACKLIST, plate_buf);
             return PARKING_ERR_INVALID;
-        }
-
-        // 4. 中文车牌不能直接上 OLED，使用 MaixCAM 转换后的显示车牌（若可用）
-        if (g_maixcam_plate_display[0] != 0) {
-            display_plate = (const uint8_t*)g_maixcam_plate_display;
         }
     } else {
         return PARKING_ERR_INVALID;
@@ -616,11 +617,7 @@ uint8_t ParkingSystem_HandleExit(const uint8_t *uid, const uint8_t *license_plat
         }
         memcpy(uid_buf, parking_spaces[space_id].card_uid, 4);
         memcpy(plate_buf, parking_spaces[space_id].license_plate, MAX_LICENSE_PLATE_LEN);
-        if (g_maixcam_plate_display[0] != 0) {
-            memcpy(display_buf, g_maixcam_plate_display, MAX_LICENSE_PLATE_LEN);
-        } else {
-            memcpy(display_buf, plate_buf, MAX_LICENSE_PLATE_LEN);
-        }
+        memcpy(display_buf, plate_buf, MAX_LICENSE_PLATE_LEN);
     } else {
         return PARKING_ERR_INVALID;
     }
@@ -670,8 +667,10 @@ uint8_t ParkingSystem_HandleExit(const uint8_t *uid, const uint8_t *license_plat
     g_disp_mode = DISP_MODE_OUT;
     g_disp_start_time = timer_cnt;
     OLED_Clear();
-    OLED_ShowString(0, 0, (uint8_t *)"Wait Fee...", 16, 1);
-    OLED_ShowString(0, 16, display_buf, 16, 1);
+    OLED_ShowCNStringCenter(0, CN_TXT_PLEASE_WAIT, 1);
+    OLED_ShowPlateLine(16, display_buf);
+    OLED_ShowCNStringCenter(32, CN_TXT_CALC_FEE, 1);
+    OLED_ShowCNStringCenter(48, CN_TXT_DO_NOT_LEAVE, 1);
 
     // 7. 开闸：非阻塞触发
     Servo2_360_KeyAction();
@@ -725,22 +724,21 @@ void ParkingSystem_HandleFeeResult(uint32_t fee)
  */
 void ParkingSystem_ShowDenied(uint8_t reason, const uint8_t *license_plate)
 {
-    uint8_t buf[32];
+    u8 x;
 
     switch (reason) {
         case OLED_DISPLAY_UNREGISTERED:
-            // 未注册卡片：保持原界面（时间 + UID + Unregistered + Access Denied）
+            // 未注册卡片：卡号 + 未注册提示（license_plate 参数传的是 UID 文本）
             OLED_Clear();
-            sprintf((char*)buf, "%02d/%02d %02d:%02d:%02d", mon, day, hour, min, sec);
-            OLED_ShowString(0, 0, buf, 16, 1);
+            OLED_ShowCNStringCenter(0, CN_TXT_UNREGISTERED, 1);
+            x = OLED_LabelColon(16, CN_TXT_CARD);
             if (license_plate != NULL && license_plate[0] != 0) {
-                sprintf((char*)buf, "uid:%s", (char*)license_plate);
-                OLED_ShowString(0, 16, buf, 16, 1);
+                (void)OLED_ShowCNString(x, 16, (const char*)license_plate, 1);
             } else {
-                OLED_ShowString(0, 16, (uint8_t *)"uid:--------", 16, 1);
+                (void)OLED_ShowCNString(x, 16, "--------", 1);
             }
-            OLED_ShowString(0, 32, (uint8_t *)"Unregistered", 16, 1);
-            OLED_ShowString(0, 48, (uint8_t *)"Access Denied", 16, 1);
+            OLED_ShowCNStringCenter(32, CN_TXT_FORBIDDEN, 1);
+            OLED_ShowCNStringCenter(48, CN_TXT_CONTACT_ADMIN, 1);
             g_disp_mode = DISP_MODE_FULL;
             g_disp_start_time = timer_cnt;
             break;
@@ -814,58 +812,99 @@ void MaixCAM_HandleExit(uint8_t *license_plate)
 }
 
 // ==================== OLED 显示函数 ====================
+/* ---------- 中文显示小工具 ---------- */
+/* 标签 + ASCII 冒号，返回冒号后的 x 坐标 */
+static u8 OLED_LabelColon(u8 y, const char *label)
+{
+    u8 x = OLED_ShowCNString(0, y, label, 1);
+    return OLED_ShowCNString(x, y, ":", 1);
+}
+
+/* 车牌行：车牌:XXXX（自动识别 UTF-8 / GB2312 / ASCII 车牌） */
+static void OLED_ShowPlateLine(u8 y, const uint8_t *plate)
+{
+    u8 x = OLED_LabelColon(y, CN_TXT_PLATE);
+    (void)OLED_ShowPlate(x, y, plate, 1);
+}
+
+/* 卡号行：卡号:XXXXXXXX */
+static void OLED_ShowCardLine(u8 y, const uint8_t *uid)
+{
+    char buf[12];
+    u8 x = OLED_LabelColon(y, CN_TXT_CARD);
+    sprintf(buf, "%02X%02X%02X%02X", uid[0], uid[1], uid[2], uid[3]);
+    (void)OLED_ShowCNString(x, y, buf, 1);
+}
+
+/* 标签 + 数字 + 可选单位，如 "余额:100元" */
+static void OLED_ShowLabelNumber(u8 y, const char *label, uint32_t value, const char *unit)
+{
+    char buf[12];
+    u8 x = OLED_LabelColon(y, label);
+    sprintf(buf, "%u", (unsigned)value);
+    x = OLED_ShowCNString(x, y, buf, 1);
+    if (unit != NULL) {
+        (void)OLED_ShowCNString(x, y, unit, 1);
+    }
+}
+
 /**
- * @brief  OLED 显示主界面（时间、车位状态、红外状态）
- * @note   由 main.c 迁入；内部不再调用 OLED_Refresh（由 Display_Task 统一刷新）
+ * @brief  主界面时间行（供 Display_Task 每秒局部重绘）
+ */
+void OLED_Display_Main_TimeLine(void)
+{
+    char buf[24];
+    u8 x = OLED_ShowCNString(0, 0, CN_TXT_TIME, 1);
+    sprintf(buf, " %02d/%02d %02d:%02d:%02d", mon, day, hour, min, sec);
+    (void)OLED_ShowCNString(x, 0, buf, 1);
+}
+
+/**
+ * @brief  OLED 显示主界面（时间、车位状态、统计）
+ * @note   内部不再调用 OLED_Refresh（由 Display_Task 统一刷新）
  */
 void OLED_Display_Main_Info(void)
 {
-    char buf[32];
-    uint8_t i;                   // 循环变量
-    uint8_t occupied_count = 0;  // 已占用车位计数（通过入场记录）
-    uint8_t free_count = 0;      // 空闲车位计数
+    char buf[12];
+    uint8_t i;
+    uint8_t occupied_count = 0;
+    uint8_t free_count;
+    u8 x;
 
-    // 第 1 行：显示当前时间（如 "04/30 12:34:56"）
-    sprintf(buf, "%02d/%02d %02d:%02d:%02d", mon, day, hour, min, sec);
-    OLED_ShowString(0, 0, (uint8_t *)buf, 16, 1);
+    // 第 1 行：时间
+    OLED_Display_Main_TimeLine();
 
-    // 第 2 行：显示车位标题
-    OLED_ShowString(0, 16, (uint8_t *)"CW:P1  P2  P3", 16, 1);
-
-    // 第 3 行：红外传感器状态反映P1到P3的车位情况
-    // 使用红外检测的状态来显示单个车位状态
-    if (ir_detected_parking[0]) {
-        OLED_ShowString(24, 32, (uint8_t *)"YOU", 16, 1);  // 红外检测到车
-    } else {
-        OLED_ShowString(24, 32, (uint8_t *)"WU ", 16, 1);  // 红外未检测到
-    }
-
-    if (ir_detected_parking[1]) {
-        OLED_ShowString(56, 32, (uint8_t *)"YOU", 16, 1);
-    } else {
-        OLED_ShowString(56, 32, (uint8_t *)"WU ", 16, 1);
-    }
-
-    if (ir_detected_parking[2]) {
-        OLED_ShowString(88, 32, (uint8_t *)"YOU", 16, 1);
-    } else {
-        OLED_ShowString(88, 32, (uint8_t *)"WU ", 16, 1);
-    }
-
-    // 第 4 行：统计空闲车位
-    // 空闲车位数量由入场车辆数决定（通过 parking_spaces 记录）
+    // 第 2 行：车位1有 2无 3有（三路红外状态）
+    x = OLED_ShowCNString(0, 16, CN_TXT_SLOT, 1);
     for (i = 0; i < MAX_PARKING_SPACES; i++) {
-        if (parking_spaces[i].is_occupied) {
-            occupied_count++;  // 统计已入场的车辆数
+        sprintf(buf, "%d", (int)(i + 1));
+        x = OLED_ShowCNString(x, 16, buf, 1);
+        x = OLED_ShowCNString(x, 16, ir_detected_parking[i] ? CN_TXT_HAS : CN_TXT_NO, 1);
+        if ((i + 1) < MAX_PARKING_SPACES) {
+            x = OLED_ShowCNString(x, 16, " ", 1);
         }
     }
-    // 计算空闲车位 = 总车位 - 已入场车辆数
-    free_count = MAX_PARKING_SPACES - occupied_count;
 
-    // 格式化显示，固定长度避免字符残留
-    // 格式："Free: 1/3" （空闲数/总车位数）
-    sprintf(buf, "Free: %d/%d    ", free_count, MAX_PARKING_SPACES);
-    OLED_ShowString(0, 48, (uint8_t *)buf, 16, 1);
+    // 第 3 行：空闲车位:x/y
+    for (i = 0; i < MAX_PARKING_SPACES; i++) {
+        if (parking_spaces[i].is_occupied) {
+            occupied_count++;
+        }
+    }
+    free_count = (uint8_t)(MAX_PARKING_SPACES - occupied_count);
+    x = OLED_LabelColon(32, CN_TXT_FREE_SLOT);
+    sprintf(buf, "%d/%d", free_count, MAX_PARKING_SPACES);
+    (void)OLED_ShowCNString(x, 32, buf, 1);
+
+    // 第 4 行：记录:n 在场:m
+    x = OLED_LabelColon(48, CN_TXT_RECORD);
+    sprintf(buf, "%u", (unsigned)record_count);
+    x = OLED_ShowCNString(x, 48, buf, 1);
+    x = OLED_ShowCNString(x, 48, " ", 1);
+    x = OLED_ShowCNString(x, 48, CN_TXT_IN_PARK, 1);
+    x = OLED_ShowCNString(x, 48, ":", 1);
+    sprintf(buf, "%d", occupied_count);
+    (void)OLED_ShowCNString(x, 48, buf, 1);
 }
 
 /**
@@ -874,52 +913,43 @@ void OLED_Display_Main_Info(void)
  */
 void OLED_DisplayInInfo(uint8_t space_id, uint8_t *license_plate, uint8_t *uid)
 {
-    uint8_t buf[32];
-    uint8_t card_index;
-
-    OLED_Clear();
-    OLED_ShowString(0, 0, (uint8_t *)"welcome", 16, 1);
-
-    sprintf((char*)buf, "CP:%s", (char*)license_plate);
-    OLED_ShowString(0, 16, buf, 16, 1);
-
-    sprintf((char*)buf, "UID:%02X%02X%02X%02X", uid[0], uid[1], uid[2], uid[3]);
-    OLED_ShowString(0, 32, buf, 16, 1);
-
-    card_index = FindCardInDatabase(uid);
-    if (card_index != 0xFF) {
-        sprintf((char*)buf, "money:%d", card_database[card_index].balance);
-    } else {
-        sprintf((char*)buf, "money:0");
-    }
-    OLED_ShowString(0, 48, buf, 16, 1);
-}
-
-/**
- * @brief  OLED 显示车辆出场信息
- * @note   内部不再调用 OLED_Refresh（由 Display_Task 统一刷新）
- */
-void OLED_DisplayOutInfo(uint8_t *license_plate, uint32_t fee, uint8_t *uid)
-{
-    uint8_t buf[32];
     uint8_t card_index;
     uint32_t balance = 0;
 
+    (void)space_id;
+
     OLED_Clear();
-    OLED_ShowString(0, 0, (uint8_t *)"goodbye", 16, 1);
-
-    sprintf((char*)buf, "CP:%s", (char*)license_plate);
-    OLED_ShowString(0, 16, buf, 16, 1);
-
-    sprintf((char*)buf, "UID:%02X%02X%02X%02X", uid[0], uid[1], uid[2], uid[3]);
-    OLED_ShowString(0, 32, buf, 16, 1);
+    OLED_ShowCNStringCenter(0, CN_TXT_WELCOME, 1);
+    OLED_ShowPlateLine(16, license_plate);
+    OLED_ShowCardLine(32, uid);
 
     card_index = FindCardInDatabase(uid);
     if (card_index != 0xFF) {
         balance = card_database[card_index].balance;
     }
-    sprintf((char*)buf, "fee:%d bal:%d", fee, balance);
-    OLED_ShowString(0, 48, buf, 16, 1);
+    OLED_ShowLabelNumber(48, CN_TXT_BALANCE, balance, CN_TXT_YUAN);
+}
+
+/**
+ * @brief  OLED 显示车辆出场信息（费用 + 余额）
+ * @note   内部不再调用 OLED_Refresh（由 Display_Task 统一刷新）
+ */
+void OLED_DisplayOutInfo(uint8_t *license_plate, uint32_t fee, uint8_t *uid)
+{
+    uint8_t card_index;
+    uint32_t balance = 0;
+
+    OLED_Clear();
+    OLED_ShowCNStringCenter(0, CN_TXT_SAFE_TRAVEL, 1);
+    OLED_ShowPlateLine(16, license_plate);
+
+    OLED_ShowLabelNumber(32, CN_TXT_FEE, fee, CN_TXT_YUAN);
+
+    card_index = FindCardInDatabase(uid);
+    if (card_index != 0xFF) {
+        balance = card_database[card_index].balance;
+    }
+    OLED_ShowLabelNumber(48, CN_TXT_CARD_BALANCE, balance, CN_TXT_YUAN);
 }
 
 /**
@@ -944,17 +974,14 @@ static uint8_t GetOccupiedSpaceCount(void)
  */
 void OLED_DisplayBlacklist(uint8_t *license_plate)
 {
-    uint8_t buf[32];
-
     OLED_Clear();
 
-    OLED_ShowString(0, 0, (uint8_t*)"BLACKLIST", 16, 1);
+    OLED_ShowCNStringCenter(0, CN_TXT_BLACKLIST, 1);
     if (license_plate != NULL && license_plate[0] != 0) {
-        sprintf((char*)buf, "CP:%s", (char*)license_plate);
-        OLED_ShowString(0, 16, buf, 16, 1);
+        OLED_ShowPlateLine(16, license_plate);
     }
-    OLED_ShowString(0, 32, (uint8_t*)"ACCESS DENIED", 16, 1);
-    OLED_ShowString(0, 48, (uint8_t*)"Card Blocked", 16, 1);
+    OLED_ShowCNStringCenter(32, CN_TXT_FORBIDDEN, 1);
+    OLED_ShowCNStringCenter(48, CN_TXT_CONTACT_ADMIN, 1);
 
     g_disp_mode = DISP_MODE_FULL;
     g_disp_start_time = timer_cnt;
@@ -966,19 +993,20 @@ void OLED_DisplayBlacklist(uint8_t *license_plate)
  */
 void OLED_DisplayParkingFull(uint8_t *license_plate)
 {
-    uint8_t buf[32];
+    char buf[12];
     uint8_t occupied = GetOccupiedSpaceCount();
+    u8 x;
 
     (void)license_plate;  // 保留形参以兼容原接口
 
     OLED_Clear();
 
-    OLED_ShowString(0, 0, (uint8_t*)"PARKING FULL", 16, 1);
-    OLED_ShowString(0, 16, (uint8_t*)"Sorry!", 16, 1);
-    OLED_ShowString(0, 32, (uint8_t*)"Please leave", 16, 1);
-
-    sprintf((char*)buf, "%d/%d Spaces", occupied, MAX_PARKING_SPACES);
-    OLED_ShowString(0, 48, buf, 16, 1);
+    OLED_ShowCNStringCenter(0, CN_TXT_FULL, 1);
+    x = OLED_LabelColon(16, CN_TXT_FREE_SLOT);
+    sprintf(buf, "%d/%d", (int)(MAX_PARKING_SPACES - occupied), MAX_PARKING_SPACES);
+    (void)OLED_ShowCNString(x, 16, buf, 1);
+    OLED_ShowCNStringCenter(32, CN_TXT_FORBIDDEN, 1);
+    OLED_ShowCNStringCenter(48, CN_TXT_TRY_LATER, 1);
 
     printf("[Parking] Full! %d/%d spaces occupied\r\n", occupied, MAX_PARKING_SPACES);
 
@@ -992,23 +1020,12 @@ void OLED_DisplayParkingFull(uint8_t *license_plate)
  */
 void OLED_DisplayUnregistered(uint8_t *uid)
 {
-    uint8_t buf[32];
-
     OLED_Clear();
 
-    // 第一行：显示时间
-    sprintf((char*)buf, "%02d/%02d %02d:%02d:%02d", mon, day, hour, min, sec);
-    OLED_ShowString(0, 0, (uint8_t *)buf, 16, 1);
-
-    // 第二行：显示UID
-    sprintf((char*)buf, "uid:%02X%02X%02X%02X", uid[0], uid[1], uid[2], uid[3]);
-    OLED_ShowString(0, 16, buf, 16, 1);
-
-    // 第三行：显示未注册提示
-    OLED_ShowString(0, 32, (uint8_t *)"Unregistered", 16, 1);
-
-    // 第四行：显示拒绝入场
-    OLED_ShowString(0, 48, (uint8_t *)"Access Denied", 16, 1);
+    OLED_ShowCNStringCenter(0, CN_TXT_UNREGISTERED, 1);
+    OLED_ShowCardLine(16, uid);
+    OLED_ShowCNStringCenter(32, CN_TXT_FORBIDDEN, 1);
+    OLED_ShowCNStringCenter(48, CN_TXT_CONTACT_ADMIN, 1);
 
     g_disp_mode = DISP_MODE_FULL;
     g_disp_start_time = timer_cnt;
@@ -1115,14 +1132,15 @@ void Mode_CheckTimeout(void)
  */
 void OLED_DisplayConfigMode(void)
 {
-    uint8_t buf[32];
+    char buf[12];
     uint32_t elapsed;
     uint32_t remaining;
+    u8 x;
 
     OLED_Clear();
-    OLED_ShowString(0, 0, (uint8_t *)"CONFIG MODE", 16, 1);
-    OLED_ShowString(0, 16, (uint8_t *)"Place card to", 16, 1);
-    OLED_ShowString(0, 32, (uint8_t *)"read/write", 16, 1);
+    OLED_ShowCNStringCenter(0, CN_TXT_CONFIG_MODE, 1);
+    OLED_ShowCNStringCenter(16, CN_TXT_PLACE_CARD, 1);
+    OLED_ShowCNStringCenter(32, CN_TXT_READ_WRITE, 1);
 
     // 显示超时倒计时
     elapsed = Time_GetSeconds() - g_config_mode_state.last_activity_time;
@@ -1130,8 +1148,10 @@ void OLED_DisplayConfigMode(void)
         elapsed = CONFIG_TIMEOUT_SECONDS;
     }
     remaining = CONFIG_TIMEOUT_SECONDS - elapsed;
-    sprintf((char*)buf, "Timeout:%ds", (int)remaining);
-    OLED_ShowString(0, 48, buf, 16, 1);
+    x = OLED_LabelColon(48, CN_TXT_TIMEOUT);
+    sprintf(buf, "%u", (unsigned)remaining);
+    x = OLED_ShowCNString(x, 48, buf, 1);
+    (void)OLED_ShowCNString(x, 48, CN_TXT_SECOND, 1);
 }
 
 /**
@@ -1140,32 +1160,29 @@ void OLED_DisplayConfigMode(void)
  */
 void OLED_DisplayConfigCardInfo(void)
 {
-    uint8_t buf[32];
-
-    if (!g_config_mode_state.card_on_reader) {
-        OLED_DisplayConfigMode();  // 无卡，显示主界面
-        return;
-    }
+    const uint8_t *plate = g_config_mode_state.current_card_data.license_plate;
+    u8 x;
 
     OLED_Clear();
-    OLED_ShowString(0, 0, (uint8_t *)"CARD INFO", 16, 1);
+    OLED_ShowCNStringCenter(0, CN_TXT_CARD_INFO, 1);
+    OLED_ShowCardLine(16, g_config_mode_state.current_card_uid);
 
-    // 显示UID
-    sprintf((char*)buf, "UID:%02X%02X%02X%02X",
-        g_config_mode_state.current_card_uid[0],
-        g_config_mode_state.current_card_uid[1],
-        g_config_mode_state.current_card_uid[2],
-        g_config_mode_state.current_card_uid[3]);
-    OLED_ShowString(0, 16, buf, 16, 1);
-
-    // 显示车牌号或状态
-    if (g_config_mode_state.current_card_data.is_valid) {
-        OLED_ShowString(0, 32, (uint8_t *)"Valid", 16, 1);
-        if (g_config_mode_state.current_card_data.license_plate[0] != 0) {
-            OLED_ShowString(0, 48, g_config_mode_state.current_card_data.license_plate, 16, 1);
-        }
+    if (g_config_mode_state.current_card_data.is_valid && (plate[0] != 0)) {
+        OLED_ShowPlateLine(32, plate);
     } else {
-        OLED_ShowString(0, 32, (uint8_t *)"Invalid Card", 16, 1);
+        x = OLED_LabelColon(32, CN_TXT_PLATE);
+        (void)OLED_ShowCNString(x, 32, "----", 1);
+    }
+
+    if (!g_config_mode_state.current_card_data.is_valid) {
+        x = OLED_LabelColon(48, CN_TXT_STATUS);
+        (void)OLED_ShowCNString(x, 48, CN_TXT_NOT_WRITTEN, 1);
+    } else if (g_config_mode_state.current_card_data.is_blacklist) {
+        x = OLED_LabelColon(48, CN_TXT_STATUS);
+        (void)OLED_ShowCNString(x, 48, CN_TXT_BLACKLIST_STATUS, 1);
+    } else {
+        OLED_ShowLabelNumber(48, CN_TXT_BALANCE,
+                             g_config_mode_state.current_card_data.balance, CN_TXT_YUAN);
     }
 }
 

@@ -1,0 +1,48 @@
+#ifndef __OLED_CN_TEXT_H__
+#define __OLED_CN_TEXT_H__
+
+/**
+ * @file    oled_cn_text.h
+ * @brief   OLED 中文 UI 文本（UTF-8 字节显式转义）
+ *
+ * 由 tools/gen_cn_font.py 自动生成。
+ * 使用字节转义而不是源码里的中文，避免 Keil AC5 对源码编码的依赖。
+ */
+
+#define CN_TXT_TIME                "\xE6\x97\xB6\xE9\x97\xB4"  /* 时间 */
+#define CN_TXT_SLOT                "\xE8\xBD\xA6\xE4\xBD\x8D"  /* 车位 */
+#define CN_TXT_HAS                 "\xE6\x9C\x89"  /* 有 */
+#define CN_TXT_NO                  "\xE6\x97\xA0"  /* 无 */
+#define CN_TXT_FREE_SLOT           "\xE7\xA9\xBA\xE9\x97\xB2\xE8\xBD\xA6\xE4\xBD\x8D"  /* 空闲车位 */
+#define CN_TXT_RECORD              "\xE8\xAE\xB0\xE5\xBD\x95"  /* 记录 */
+#define CN_TXT_IN_PARK             "\xE5\x9C\xA8\xE5\x9C\xBA"  /* 在场 */
+#define CN_TXT_WELCOME             "\xE6\xAC\xA2\xE8\xBF\x8E\xE5\x85\x89\xE4\xB8\xB4"  /* 欢迎光临 */
+#define CN_TXT_PLATE               "\xE8\xBD\xA6\xE7\x89\x8C"  /* 车牌 */
+#define CN_TXT_CARD                "\xE5\x8D\xA1\xE5\x8F\xB7"  /* 卡号 */
+#define CN_TXT_BALANCE             "\xE4\xBD\x99\xE9\xA2\x9D"  /* 余额 */
+#define CN_TXT_YUAN                "\xE5\x85\x83"  /* 元 */
+#define CN_TXT_PLEASE_WAIT         "\xE8\xAF\xB7\xE7\xA8\x8D\xE5\x80\x99"  /* 请稍候 */
+#define CN_TXT_CALC_FEE            "\xE6\xAD\xA3\xE5\x9C\xA8\xE8\xAE\xA1\xE7\xAE\x97\xE8\xB4\xB9\xE7\x94\xA8"  /* 正在计算费用 */
+#define CN_TXT_DO_NOT_LEAVE        "\xE8\xAF\xB7\xE5\x8B\xBF\xE7\xA6\xBB\xE5\xBC\x80"  /* 请勿离开 */
+#define CN_TXT_SAFE_TRAVEL         "\xE4\xB8\x80\xE8\xB7\xAF\xE5\xB9\xB3\xE5\xAE\x89"  /* 一路平安 */
+#define CN_TXT_FEE                 "\xE6\x9C\xAC\xE6\xAC\xA1\xE8\xB4\xB9\xE7\x94\xA8"  /* 本次费用 */
+#define CN_TXT_CARD_BALANCE        "\xE5\x8D\xA1\xE4\xBD\x99\xE9\xA2\x9D"  /* 卡余额 */
+#define CN_TXT_UNREGISTERED        "\xE6\x9C\xAA\xE6\xB3\xA8\xE5\x86\x8C\xE5\x8D\xA1"  /* 未注册卡 */
+#define CN_TXT_FORBIDDEN           "\xE7\xA6\x81\xE6\xAD\xA2\xE5\x85\xA5\xE5\x9C\xBA"  /* 禁止入场 */
+#define CN_TXT_CONTACT_ADMIN       "\xE8\xAF\xB7\xE8\x81\x94\xE7\xB3\xBB\xE7\xAE\xA1\xE7\x90\x86\xE5\x91\x98"  /* 请联系管理员 */
+#define CN_TXT_BLACKLIST           "\xE9\xBB\x91\xE5\x90\x8D\xE5\x8D\x95\xE5\x8D\xA1"  /* 黑名单卡 */
+#define CN_TXT_FULL                "\xE8\xBD\xA6\xE4\xBD\x8D\xE5\xB7\xB2\xE6\xBB\xA1"  /* 车位已满 */
+#define CN_TXT_TRY_LATER           "\xE8\xAF\xB7\xE7\xA8\x8D\xE5\x90\x8E\xE5\x86\x8D\xE6\x9D\xA5"  /* 请稍后再来 */
+#define CN_TXT_CONFIG_MODE         "\xE9\x85\x8D\xE7\xBD\xAE\xE6\xA8\xA1\xE5\xBC\x8F"  /* 配置模式 */
+#define CN_TXT_PLACE_CARD          "\xE8\xAF\xB7\xE6\x94\xBE\xE7\xBD\xAE\xE5\x8D\xA1\xE7\x89\x87"  /* 请放置卡片 */
+#define CN_TXT_READ_WRITE          "\xE8\xAF\xBB\xE5\x8D\xA1\xE6\x88\x96\xE5\x86\x99\xE5\x8D\xA1"  /* 读卡或写卡 */
+#define CN_TXT_TIMEOUT             "\xE8\xB6\x85\xE6\x97\xB6"  /* 超时 */
+#define CN_TXT_SECOND              "\xE7\xA7\x92"  /* 秒 */
+#define CN_TXT_CARD_INFO           "\xE5\x8D\xA1\xE7\x89\x87\xE4\xBF\xA1\xE6\x81\xAF"  /* 卡片信息 */
+#define CN_TXT_STATUS              "\xE7\x8A\xB6\xE6\x80\x81"  /* 状态 */
+#define CN_TXT_NOT_WRITTEN         "\xE6\x9C\xAA\xE5\x86\x99\xE5\x85\xA5"  /* 未写入 */
+#define CN_TXT_INVALID             "\xE6\x97\xA0\xE6\x95\x88"  /* 无效 */
+#define CN_TXT_VALID               "\xE6\x9C\x89\xE6\x95\x88"  /* 有效 */
+#define CN_TXT_BLACKLIST_STATUS    "\xE9\xBB\x91\xE5\x90\x8D\xE5\x8D\x95"  /* 黑名单 */
+
+#endif /* __OLED_CN_TEXT_H__ */

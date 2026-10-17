@@ -1,6 +1,7 @@
 #include "oled.h"
 #include "stdlib.h"
 #include "oledfont.h"  	 
+#include "oled_cn14.h"
 #include "board.h"
 
 u8 OLED_GRAM[128][8];
@@ -534,6 +535,282 @@ void OLED_Init(void)
         OLED_Refresh();
     }
     OLED_WR_Byte(0xAF,OLED_CMD);
+}
+
+/* ==================== 14x14 中文字库显示（oled_cn14.h） ==================== */
+/**
+ * @brief  按 Unicode 码点查找 14x14 中文字模
+ * @retval 字模首地址（28 字节），未收录返回 NULL
+ * @note   字库按 Unicode 升序排列，使用二分查找，O(log n)。
+ */
+static const uint8_t *OLED_CN14_GetBitmap(uint16_t unicode)
+{
+    uint16_t lo = 0;
+    uint16_t hi = OLED_CN14_COUNT;
+    uint16_t mid;
+
+    while (lo < hi)
+    {
+        mid = (uint16_t)(lo + (hi - lo) / 2u);
+        if (oled_cn14_map[mid].unicode < unicode)
+        {
+            lo = (uint16_t)(mid + 1u);
+        }
+        else
+        {
+            hi = mid;
+        }
+    }
+
+    if ((lo < OLED_CN14_COUNT) && (oled_cn14_map[lo].unicode == unicode))
+    {
+        return oled_cn14_bitmap[oled_cn14_map[lo].index];
+    }
+    return 0;
+}
+
+/**
+ * @brief  GB2312 双字节 -> Unicode（仅字库中收录的省份/特殊汉字）
+ */
+static uint16_t OLED_CN14_FromGB2312(uint8_t hi, uint8_t lo)
+{
+    uint16_t i;
+
+    for (i = 0; i < OLED_GB2312_COUNT; i++)
+    {
+        if ((oled_gb2312_map[i].hi == hi) && (oled_gb2312_map[i].lo == lo))
+        {
+            return oled_gb2312_map[i].unicode;
+        }
+    }
+    return 0;
+}
+
+/**
+ * @brief  解码一个 UTF-8 字符
+ * @param  pp: 输入/输出指针（成功时指向下一个字符）
+ * @param  cp: 输出 Unicode 码点
+ * @retval 字节数（1/2/3），非法字节返回 0
+ */
+static uint8_t OLED_UTF8_Decode(const uint8_t **pp, uint16_t *cp)
+{
+    const uint8_t *p = *pp;
+    uint8_t b = p[0];
+
+    if (b < 0x80u)
+    {
+        *cp = b;
+        *pp = p + 1;
+        return 1;
+    }
+    if (((b & 0xE0u) == 0xC0u) && (p[1] != 0))
+    {
+        *cp = (uint16_t)(((uint16_t)(b & 0x1Fu) << 6) | (uint16_t)(p[1] & 0x3Fu));
+        *pp = p + 2;
+        return 2;
+    }
+    if (((b & 0xF0u) == 0xE0u) && (p[1] != 0) && (p[2] != 0))
+    {
+        *cp = (uint16_t)(((uint16_t)(b & 0x0Fu) << 12) |
+                         ((uint16_t)(p[1] & 0x3Fu) << 6) |
+                         (uint16_t)(p[2] & 0x3Fu));
+        *pp = p + 3;
+        return 3;
+    }
+
+    *pp = p + 1;
+    *cp = 0;
+    return 0;
+}
+
+/**
+ * @brief  在指定位置绘制一个 14x14 汉字
+ * @param  x,y: 字符左上角（y 为 16px 行高内的顶部坐标）
+ * @note   未收录字符不绘制；越界由 OLED_DrawPoint 保护。
+ */
+void OLED_ShowCN14Char(u8 x, u8 y, uint16_t unicode, u8 mode)
+{
+    const uint8_t *bmp = OLED_CN14_GetBitmap(unicode);
+    uint8_t r;
+    uint8_t c;
+    uint16_t bits;
+
+    if (bmp == 0)
+    {
+        return;
+    }
+
+    for (r = 0; r < OLED_CN14_HEIGHT; r++)
+    {
+        bits = (uint16_t)(((uint16_t)bmp[r * 2u] << 8) | (uint16_t)bmp[r * 2u + 1u]);
+        if (bits == 0u)
+        {
+            continue;
+        }
+        for (c = 0; c < OLED_CN14_WIDTH; c++)
+        {
+            if (bits & (uint16_t)(0x8000u >> c))
+            {
+                OLED_DrawPoint((u8)(x + c), (u8)(y + r), mode);
+            }
+        }
+    }
+}
+
+/**
+ * @brief  显示混合中英文/数字字符串
+ * @param  x,y: 起始位置（建议 y 取 0/16/32/48，中文占 14px、ASCII 用 12px 字库）
+ * @param  str: UTF-8 字符串（ASCII 部分使用 6x12 字库）
+ * @retval 下一个字符的 x 坐标
+ * @note   ASCII 使用 6x12 字库（垂直居中于 16px 行），汉字使用 14x14 字库。
+ */
+u8 OLED_ShowCNString(u8 x, u8 y, const char *str, u8 mode)
+{
+    const uint8_t *p = (const uint8_t *)str;
+    const uint8_t *next;
+    uint16_t cp;
+    uint8_t len;
+
+    if (str == 0)
+    {
+        return x;
+    }
+
+    while (*p != 0u)
+    {
+        next = p;
+        len = OLED_UTF8_Decode(&next, &cp);
+
+        if (len == 1u)
+        {
+            if ((cp >= 0x20u) && (cp <= 0x7Eu))
+            {
+                OLED_ShowChar(x, (u8)(y + 2u), (u8)cp, 12, mode);
+                x = (u8)(x + 6u);
+            }
+        }
+        else if (len == 3u)
+        {
+            if (OLED_CN14_GetBitmap(cp) != 0)
+            {
+                OLED_ShowCN14Char(x, (u8)(y + 1u), cp, mode);
+                x = (u8)(x + 14u);
+            }
+            else
+            {
+                OLED_ShowChar(x, (u8)(y + 2u), (u8)'?', 12, mode);
+                x = (u8)(x + 6u);
+            }
+        }
+        else if (len == 2u)
+        {
+            OLED_ShowChar(x, (u8)(y + 2u), (u8)'?', 12, mode);
+            x = (u8)(x + 6u);
+        }
+
+        p = next;
+    }
+
+    return x;
+}
+
+/**
+ * @brief  计算混合字符串的像素宽度（汉字 14px、ASCII 6px）
+ */
+u8 OLED_CNStringWidth(const char *str)
+{
+    const uint8_t *p = (const uint8_t *)str;
+    const uint8_t *next;
+    uint16_t cp;
+    uint8_t len;
+    uint16_t width = 0;
+
+    if (str == 0)
+    {
+        return 0;
+    }
+
+    while (*p != 0u)
+    {
+        next = p;
+        len = OLED_UTF8_Decode(&next, &cp);
+        if (len == 1u)
+        {
+            if ((cp >= 0x20u) && (cp <= 0x7Eu))
+            {
+                width = (uint16_t)(width + 6u);
+            }
+        }
+        else if (len == 3u)
+        {
+            width = (uint16_t)(width + ((OLED_CN14_GetBitmap(cp) != 0) ? 14u : 6u));
+        }
+        else if (len == 2u)
+        {
+            width = (uint16_t)(width + 6u);
+        }
+        p = next;
+    }
+
+    return (u8)((width > 255u) ? 255u : width);
+}
+
+/**
+ * @brief  居中显示混合字符串
+ */
+void OLED_ShowCNStringCenter(u8 y, const char *str, u8 mode)
+{
+    u8 width = OLED_CNStringWidth(str);
+    u8 x = (width < 128u) ? (u8)((128u - width) / 2u) : 0u;
+    (void)OLED_ShowCNString(x, y, str, mode);
+}
+
+/**
+ * @brief  显示车牌（自动识别 UTF-8 汉字 / GB2312 汉字 / ASCII）
+ * @param  plate: 以 0 结尾的车牌缓冲区；支持：
+ *                - MaixCAM 原始车牌：UTF-8 编码（如 E4 BA AC A1 32 33...）
+ *                - 上位机卡片数据库车牌：GB2312 编码（如 BE A9 A1 32 33...）
+ *                - ASCII（CAR12345 等）
+ * @retval 下一个字符 x 坐标
+ * @note   只转换第一个汉字（省份），其余按 ASCII 显示。
+ */
+u8 OLED_ShowPlate(u8 x, u8 y, const u8 *plate, u8 mode)
+{
+    uint16_t cp;
+
+    if ((plate == 0) || (plate[0] == 0u))
+    {
+        return x;
+    }
+
+    /* 1) UTF-8 汉字（MaixCAM 车牌）：直接走混合字符串 */
+    if (((plate[0] & 0xF0u) == 0xE0u) &&
+        ((plate[1] & 0xC0u) == 0x80u) &&
+        ((plate[2] & 0xC0u) == 0x80u))
+    {
+        return OLED_ShowCNString(x, y, (const char *)plate, mode);
+    }
+
+    /* 2) GB2312 汉字（上位机数据库车牌）：查表转换第一个汉字 */
+    if ((plate[0] >= 0xA1u) && (plate[0] <= 0xF7u) &&
+        (plate[1] >= 0xA1u) && (plate[1] <= 0xFEu))
+    {
+        cp = OLED_CN14_FromGB2312(plate[0], plate[1]);
+        if (cp != 0u)
+        {
+            OLED_ShowCN14Char(x, (u8)(y + 1u), cp, mode);
+            x = (u8)(x + 14u);
+        }
+        else
+        {
+            OLED_ShowChar(x, (u8)(y + 2u), (u8)'?', 12, mode);
+            x = (u8)(x + 6u);
+        }
+        return OLED_ShowCNString(x, y, (const char *)(plate + 2), mode);
+    }
+
+    /* 3) ASCII 车牌 */
+    return OLED_ShowCNString(x, y, (const char *)plate, mode);
 }
 
 

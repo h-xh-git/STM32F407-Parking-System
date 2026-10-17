@@ -8,6 +8,8 @@
 | `check_plate_table.py` | 校验 `bsp/uart6/bsp_uart6.c` 中省份 Unicode 映射表 |
 | `check_stack_usage.py` | 扫描 >128 字节的函数内局部数组，提示 1KB 栈溢出风险 |
 | `verify.py` | 一键运行以上检查 + Python 语法检查 |
+| `check_cn_font.py` | 校验 `bsp/OLED/oled_cn14.h` 字库与 `oled_cn_text.h` 文本宏是否匹配 |
+| `gen_cn_font.py` | 从 `tools/font/font_chinese_14.h`（LVGL 14px SimSun 字库）提取 UI 所需汉字，生成 `bsp/OLED/oled_cn14.h` 与 `oled_cn_text.h` |
 
 ## 依赖
 

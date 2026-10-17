@@ -4,7 +4,7 @@
 
 | 项目 | 说明 |
 |---|---|
-| MCU | STM32F407VETx（Cortex-M4F，LQFP100） |
+| MCU | STM32F407VET6（Keil 器件名 STM32F407VETx，Cortex-M4F，LQFP100） |
 | Flash | 512 KB |
 | SRAM | 128 KB（另有 64 KB CCM，当前工程未使用） |
 | 外部晶振 | HSE 8 MHz |
@@ -49,6 +49,10 @@ RC522 使用**软件模拟 SPI**（`bsp/RC522/bsp_rc522.c`），时序由 `delay
 | VCC / GND | 3.3V / GND | — |
 
 I2C 地址 0x78（写），使用软件 I2C 位翻转；驱动内部按页维护 `OLED_GRAM`，只刷新脏页。
+
+显示采用 4 行 x 16px 布局：汉字 14x14（1bpp，SimSun 风格），ASCII 6x12（`asc2_1206` 字库），
+两者混排于同一行。中文字库由 `tools/gen_cn_font.py` 生成（`bsp/OLED/oled_cn14.h`，
+112 个常用字 + 31 个省份简称，约 3.5KB Flash；`oled_cn_text.h` 存 UTF-8 文本宏）。
 
 ### 2.4 道闸舵机（SG90 360 度连续旋转）
 

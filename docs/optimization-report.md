@@ -90,6 +90,21 @@ F407 有 128KB SRAM，余量充足。ROM 预计小幅增加（新增时间/去�
 - `normalize_plate` 重写：过滤非法字符、字母统一大写、长度 7/8、首字省份汉字、第 2 位 A-Z；
 - 异常日志限频，UART 发送失败重试一次；保持 `IN:车牌\n`/`OUT:车牌\n`（UTF-8）协议与 maix API。
 
+### 5.3 OLED 中文字库与中文界面
+
+- **字库来源**：用户提供的 LVGL v8 fmt-txt 4bpp 字体 `font_chinese_14.h`（simsun.ttf, 14px）；
+- **裁剪提取**：`tools/gen_cn_font.py` 解析 LVGL 字库，按项目需要的 112 个汉字（UI 常用字 + 31 个省份简称）
+  转为 1bpp、固定 14x14x28 字节，生成 `bsp/OLED/oled_cn14.h`（约 3.5KB Flash，含 Unicode 映射与 GB2312 省份映射）；
+- **UTF-8 文本宏**：`bsp/OLED/oled_cn_text.h` 用 `\xE6...` 字节转义保存 UI 文本，避免 Keil AC5 对源码编码的依赖；
+- **混合排版**：`OLED_ShowCNString()` 同时渲染 14x14 汉字与 6x12 ASCII，`OLED_ShowCNStringCenter()` 居中，
+  `OLED_ShowPlate()` 自动识别 UTF-8 / GB2312 / ASCII 车牌；
+- **界面中文化**：主界面、欢迎/出场等待/出场结算、未注册/黑名单/满位、配置模式与卡信息全部改为中文
+  （主界面 4 行：时间、车位1有/无、空闲车位、记录/在场）；
+- **性能**：仍是脏页局部刷新，主界面每秒只刷时间行（2 页）；中文标题只在界面切换时整屏重绘；
+- **校验**：`tools/check_cn_font.py` 检查字库数量/排序、以及每个 UI 文本宏的汉字是否都在字库中。
+
+预览图（按实际字模与坐标模拟生成）：`docs/images/oled_ui_preview.png`。
+
 ---
 
 ## 6. 验证结果
@@ -107,7 +122,8 @@ python tools/verify.py
 - `tools/check_c.py`：11 个固件 `.c` 全部通过（libclang，目标 Cortex-M4/C99，0 error）；
 - Python `py_compile`：`上位机/`、`LPR/`、`tools/` 全部通过；
 - `tools/check_plate_table.py`：39 条省份映射全部正确；
-- `tools/check_stack_usage.py`：无 >128B 的局部数组（原 600B/300B 栈数组已消除）。
+- `tools/check_stack_usage.py`：无 >128B 的局部数组（原 600B/300B 栈数组已消除）；
+- `tools/check_cn_font.py`：112 个字形与 35 个 UI 文本宏匹配，字库按 Unicode 升序。
 
 ### 6.2 逻辑自测（开发过程中）
 
@@ -181,12 +197,17 @@ python tools/verify.py
 | `bsp/protocol.h` | 新增缓冲区/分帧/最小长度常量；删除重复的时间/显示声明 |
 | `bsp/uart/bsp_uart.c` | USART1 中断只入环形缓冲 |
 | `bsp/uart6/bsp_uart6.c` | 省份表修正、UTF-8/长度/噪声防护、ISR 去 printf |
-| `bsp/OLED/oled.c` | 脏页局部刷新、I2C 提速、GRAM 缩小、越界保护 |
+| `bsp/OLED/oled.c` | 脏页局部刷新、I2C 提速、GRAM 缩小、越界保护；新增 14x14 汉字渲染与中英混排 |
+| `bsp/OLED/oled_cn14.h` | 新增：112 个 14x14 汉字 1bpp 字库 + Unicode/GB2312 映射（生成文件） |
+| `bsp/OLED/oled_cn_text.h` | 新增：中文 UI 文本（UTF-8 字节转义宏，生成文件） |
 | `bsp/RC522/bsp_rc522.c` | `PcdSelectEx`、认证 UID 越界修复、复位超时、缩进告警 |
 | `bsp/sg90/bsp_sg90.c` | 非阻塞舵机状态机、非阻塞按键去抖、GPIO 结构体初始化 |
 | `bsp/hongwai/bsp_hongwai.c` | 非阻塞采样 + 去抖缓存 |
 | `上位机/parking_client.py` | 时间/多帧累积/解析健壮性/线程安全/费用计算 |
 | `上位机/requirements.txt` | 新增 pyserial 依赖 |
 | `LPR/main.py` | monotonic 时间、有界记录、车牌校验、异常限频、UART 重试 |
-| `tools/*` | libclang 静态检查、省份表/栈检查、一键 verify |
+| `tools/*` | libclang 静态检查、省份表/栈检查、中文库校验、一键 verify |
+| `tools/gen_cn_font.py` | 新增：从 LVGL 字体提取/生成项目中文字库 |
+| `tools/font/font_chinese_14.h` | 字库源文件（LVGL v8 fmt-txt 4bpp） |
+| `docs/images/oled_ui_preview.png` | 新增：OLED 中文界面模拟预览 |
 | `README.md`、`docs/*` | 新增项目/协议/硬件/优化文档 |

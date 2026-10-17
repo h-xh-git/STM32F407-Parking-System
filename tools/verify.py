@@ -48,12 +48,17 @@ def check_stack():
     return subprocess.call([sys.executable, os.path.join(ROOT, "tools", "check_stack_usage.py")]) == 0
 
 
+def check_cn_font():
+    return subprocess.call([sys.executable, os.path.join(ROOT, "tools", "check_cn_font.py")]) == 0
+
+
 def main():
     results = [
         run("C 固件静态检查", check_c),
         run("Python 语法检查", check_python),
         run("省份映射表", check_plate),
         run("栈数组扫描", check_stack),
+        run("中文字库与文本宏", check_cn_font),
     ]
     print("=" * 60)
     if all(results):

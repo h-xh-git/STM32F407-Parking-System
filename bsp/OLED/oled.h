@@ -58,5 +58,12 @@ void OLED_ScrollDisplay(u8 num,u8 space,u8 mode);
 void OLED_ShowPicture(u8 x,u8 y,u8 sizex,u8 sizey,u8 BMP[],u8 mode);
 void OLED_Init(void);
 
+/* ==================== 14x14 中文字库 + 混合中英文显示 ==================== */
+void OLED_ShowCN14Char(u8 x, u8 y, uint16_t unicode, u8 mode);
+u8   OLED_ShowCNString(u8 x, u8 y, const char *str, u8 mode);
+u8   OLED_CNStringWidth(const char *str);
+void OLED_ShowCNStringCenter(u8 y, const char *str, u8 mode);
+u8   OLED_ShowPlate(u8 x, u8 y, const u8 *plate, u8 mode);
+
 #endif
 

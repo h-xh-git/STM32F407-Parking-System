@@ -25,7 +25,12 @@ OLED 本地显示、道闸舵机控制、红外车位检测，并配套 Python �
   （车牌、余额、黑名单、有效期）。
 - **计费**：上位机按分钟/小时周期计费并回传，STM32 更新记录并显示费用。
 - **上位机 GUI**：串口连接、实时车位、车辆记录、卡片管理、计费参数、配置模式读写卡、SQLite 持久化。
-- **OLED 界面**：主界面（时间/车位/红外）、入场/出场提示、配置模式、满位/未注册/黑名单提示。
+- **OLED 中文界面**：14x14 中文字库（时间/车位/欢迎/费用/配置模式等），主界面、入场/出场提示、满位/未注册/黑名单提示全部中文化，配合脏页局部刷新。
+- **中文字库可裁剪**：由 LVGL 14px SimSun 字库提取 112 个常用汉字 + 省份简称，约 3.5 KB Flash。
+
+![OLED 中文界面模拟预览](docs/images/oled_ui_preview.png)
+
+> 上图为按实际字模/坐标模拟的 128x64 OLED 预览（主界面、入场、出场等待、出场结算、未注册、配置模式），实际以真机为准。
 
 ---
 
@@ -36,7 +41,7 @@ OLED 本地显示、道闸舵机控制、红外车位检测，并配套 Python �
 |  上位机 (Python)  | <--------------------------> |                         |
 |  Tkinter + SQLite |        自定义二进制协议       |                         |
 +-------------------+                              |                         |
-                                                   |     STM32F407VETx       |
+                                                   |     STM32F407VET6       |
 +-------------------+        USART6 115200        |                         |
 | MaixCAM 车牌识别  | ---------------------------> |  app/main.c             |
 | MaixPy + PP-OCR   |     IN:车牌 / OUT:车牌       |  bsp/parking_system.c   |
@@ -64,7 +69,7 @@ STM32F407_ProjectTemplate/
 ├─ bsp/
 │  ├─ parking_system.c/h     # 停车场业务：车位/卡库/记录/统一进出场
 │  ├─ protocol.c/h           # 与上位机的通信协议（环形缓冲 + 分片发送）
-│  ├─ OLED/                  # SSD1306 软件 I2C 驱动（局部刷新）
+│  ├─ OLED/                  # SSD1306 软件 I2C 驱动（脏页局部刷新 + 14x14 中文字库）
 │  ├─ RC522/                 # RC522 软件 SPI 驱动
 │  ├─ sg90/                  # 两路舵机 PWM + 非阻塞状态机 + 按键
 │  ├─ hongwai/               # 三路红外采样与去抖
@@ -79,7 +84,7 @@ STM32F407_ProjectTemplate/
 │  └─ requirements.txt
 ├─ LPR/                      # MaixCAM 车牌识别应用（MaixPy）
 ├─ docs/                     # 操作说明、协议、硬件、优化报告
-├─ tools/                    # 静态检查/自检脚本
+├─ tools/                    # 静态检查/自检脚本、中文字库生成脚本
 └─ README.md
 ```
 
@@ -202,7 +207,8 @@ python tools/verify.py
 - `tools/check_c.py`：以 Cortex-M4/C99 为目标，用 libclang 解析全部固件 .c（无需 ARM 工具链）；
 - Python 文件语法检查（`py_compile`）；
 - `tools/check_plate_table.py`：校验省份 Unicode 表；
-- `tools/check_stack_usage.py`：扫描 >128 字节的栈数组。
+- `tools/check_stack_usage.py`：扫描 >128 字节的栈数组；
+- `tools/check_cn_font.py`：校验中文字库与 UI 文本宏是否匹配。
 
 > 静态检查不能替代真机测试；涉及硬件时序、舵机角度、RC522 天线、串口电平的改动仍需上板验证。
 
@@ -211,7 +217,7 @@ python tools/verify.py
 ## 12. 已知限制
 
 - STM32 无硬件 RTC，时间由软件模拟，需要上位机连接后校时；断电后时间复位；
-- OLED 为 ASCII 字库，中文车牌在本地仅显示省份拼音缩写；
+- OLED 中文字库仅收录 UI 常用字 + 31 个省份简称（共 112 字），未收录汉字显示为 ?；中文车牌在本地按“省份汉字 + ASCII 字母数字”显示（上位机 GB2312 车牌会自动转省份，MaixCAM UTF-8 车牌直接显示）；
 - 注册卡数据库、车辆记录保存在 RAM 中，掉电丢失（上位机 SQLite 持久化）；
 - MaixCAM 车牌进出场为演示逻辑（按时间阈值判定），不是真实地感/道闸联动的工业方案；
 - 配置模式读写卡依赖卡片数据格式（Mifare Classic 6/7 块 / Ultralight 0~5 页），换卡类型需同步调整。

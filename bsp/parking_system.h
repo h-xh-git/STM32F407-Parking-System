@@ -180,6 +180,7 @@ void ParkingSystem_ShowDenied(uint8_t reason, const uint8_t *license_plate);
 void MaixCAM_HandleEntry(uint8_t *license_plate);  // 处理MaixCAM入场
 void MaixCAM_HandleExit(uint8_t *license_plate);   // 处理MaixCAM出场
 void OLED_Display_Main_Info(void);                 // 主界面（由 main.c 迁入，供 Display_Task 调用）
+void OLED_Display_Main_TimeLine(void);             // 主界面第 1 行时间（每秒局部重绘）
 void OLED_DisplayInInfo(uint8_t space_id, uint8_t *license_plate, uint8_t *uid);
 void OLED_DisplayOutInfo(uint8_t *license_plate, uint32_t fee, uint8_t *uid);
 void OLED_DisplayUnregistered(uint8_t *uid);

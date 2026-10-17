@@ -479,7 +479,6 @@ static void Display_Task(void)
     uint8_t occupied_count;
     uint8_t need_full_redraw;
     uint8_t i;
-    char buf[24];
 
     // 1. 配置模式超时检查（超时后 Mode_ExitConfig 会切回普通模式）
     if (g_config_mode_state.mode == MODE_CONFIG) {
@@ -555,8 +554,7 @@ static void Display_Task(void)
                 } else if (cur_sec != last_drawn_sec) {
                     // 只有时间变化：仅重绘第 1 行（2 页），减少 IIC 刷新耗时
                     last_drawn_sec = cur_sec;
-                    sprintf(buf, "%02d/%02d %02d:%02d:%02d", mon, day, hour, min, sec);
-                    OLED_ShowString(0, 0, (uint8_t *)buf, 16, 1);
+                    OLED_Display_Main_TimeLine();
                 }
                 break;
 
