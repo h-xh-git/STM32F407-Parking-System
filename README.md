@@ -1,6 +1,6 @@
 # STM32F407 智能停车场管理系统
 
-基于 STM32F407VETx 的停车场管理 demo：RFID 刷卡 + MaixCAM 车牌识别双通道进出场，
+基于 STM32F407VET6 的停车场管理 demo：RFID 刷卡 + MaixCAM 车牌识别双通道进出场，
 OLED 本地显示、道闸舵机控制、红外车位检测，并配套 Python 上位机（Tkinter GUI + SQLite）。
 
 项目在原有“可运行 demo”的基础上做过一轮系统性优化：修复了协议栈溢出/记录错位/时间进位等确定性 bug，
