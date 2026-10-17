@@ -7,6 +7,9 @@ OLED 本地显示、道闸舵机控制、红外车位检测，并配套 Python �
 把 OLED 刷新、舵机、红外、协议同步等长耗时操作改为非阻塞实现，并补齐了文档与静态自检工具。
 详见 [优化报告](docs/optimization-report.md)。
 
+> 新手请先阅读 **[操作使用说明](docs/usage.md)**：硬件接线、Keil 编译烧录、上位机连接、卡片注册、
+> 刷卡/车牌进出场、配置模式读写卡、MaixCAM 部署、可调参数与常见问题排查。
+
 ---
 
 ## 1. 功能特性
@@ -73,7 +76,7 @@ STM32F407_ProjectTemplate/
 │  ├─ parking_client.py      # Tkinter 上位机
 │  └─ requirements.txt
 ├─ LPR/                      # MaixCAM 车牌识别应用（MaixPy）
-├─ docs/                     # 协议、硬件、优化报告
+├─ docs/                     # 操作说明、协议、硬件、优化报告
 ├─ tools/                    # 静态检查/自检脚本
 └─ README.md
 ```
@@ -133,6 +136,8 @@ python parking_client.py
 
 数据库文件 `parking.db` 与脚本同目录，首次运行自动创建。
 
+完整的界面说明、卡片注册流程、配置模式操作与排障见 [操作使用说明](docs/usage.md)。
+
 ---
 
 ## 7. MaixCAM 车牌识别
@@ -145,7 +150,14 @@ python parking_client.py
 
 ---
 
-## 8. 通信协议
+## 8. 操作说明
+
+除了本 README 的快速上手内容，完整的分步操作（硬件接线核对、首次上电、卡片注册、进出场流程、
+配置模式读写卡、MaixCAM 部署、参数调整、常见问题）见 [docs/usage.md](docs/usage.md)。
+
+---
+
+## 9. 通信协议
 
 自定义二进制协议：`AA 55 CMD LEN DATA... CHECKSUM`，命令/字段/时间语义见
 [通信协议规范](docs/protocol.md)。
@@ -158,7 +170,7 @@ python parking_client.py
 
 ---
 
-## 9. 优化说明
+## 10. 优化说明
 
 本轮优化覆盖：
 
@@ -174,7 +186,7 @@ python parking_client.py
 
 ---
 
-## 10. 自检工具（可选）
+## 11. 自检工具（可选）
 
 没有 Keil 时，可在 PC 上做静态检查：
 
@@ -194,7 +206,7 @@ python tools/verify.py
 
 ---
 
-## 11. 已知限制
+## 12. 已知限制
 
 - STM32 无硬件 RTC，时间由软件模拟，需要上位机连接后校时；断电后时间复位；
 - OLED 为 ASCII 字库，中文车牌在本地仅显示省份拼音缩写；
@@ -204,7 +216,7 @@ python tools/verify.py
 
 ---
 
-## 12. 许可
+## 13. 许可
 
 `libraries/` 下 CMSIS 与 STM32F4xx StdPeriph Driver 版权归 STMicroelectronics，遵循其 LICENSE。
 项目其它代码仅用于学习与演示。
