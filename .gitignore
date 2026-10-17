@@ -1,0 +1,28 @@
+# Keil MDK 编译产物
+project/MDK(V5)/Objects/
+project/MDK(V5)/Listings/
+project/MDK(V5)/DebugConfig/
+project/MDK(V5)/*.uvoptx
+project/MDK(V5)/*.uvguix.*
+project/MDK(V5)/*.scvd
+*.hex
+*.axf
+*.map
+*.lst
+*.crf
+*.o
+*.d
+*.dep
+*.lnp
+*.sct
+*.htm
+
+# Python
+__pycache__/
+*.pyc
+
+# 上位机本地数据库
+上位机/parking.db
+
+# MaixCAM 打包产物
+LPR/dist/

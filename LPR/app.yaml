@@ -1,0 +1,9 @@
+id: ab123
+name: 车牌识别
+version: 1.0.6
+author: weibinbaba
+icon: app.png
+desc: liji
+files:
+  - main.py
+  - pp_ocr.mud
