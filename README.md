@@ -10,6 +10,8 @@ OLED 本地显示、道闸舵机控制、红外车位检测，并配套 Python �
 > 新手请先阅读 **[操作使用说明](docs/usage.md)**：硬件接线、Keil 编译烧录、上位机连接、卡片注册、
 > 刷卡/车牌进出场、配置模式读写卡、MaixCAM 部署、可调参数与常见问题排查。
 
+> GitHub 仓库：https://github.com/h-xh-git/STM32F407-Parking-System
+
 ---
 
 ## 1. 功能特性
